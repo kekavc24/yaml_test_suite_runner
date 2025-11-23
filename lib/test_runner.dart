@@ -45,19 +45,29 @@ Parsed: $parsed''', null);
   }
 }
 
-/// A trivial runner that run a test in the current thread as a simple
-/// program which always catches errors and exceptions and treats them as
-/// failures.
+/// A `try-catch` test runner.
 final class TestRunner {
-  TestRunner(
-    this.tests, {
+  /// Creates a test runner.
+  ///
+  /// The tests are loaded into the [testDirectory] provided. Purges any data
+  /// in the directory before the tests are loaded. Provide a [writer] with a
+  /// directory if you need your failed tests to be saved.
+  ///
+  /// The [parseFunction] is used to parse the yaml input and the `out.yaml`
+  /// file used as a fallback when the `jsonToDartStr` file is missing. The
+  /// [sourceComparator] compares the parsed object and the reference object
+  /// parsed from the `jsonToDartStr` or `out.yaml`.
+  TestRunner({
     required this.parseFunction,
     required this.sourceComparator,
+    String? testDirectory,
     DummyWriter? writer,
-  }) : outputWriter = writer ?? DummyWriter.forRunner(null, saveFailed: false);
+  }) : outputWriter = writer ?? DummyWriter.forRunner(null, saveFailed: false) {
+    _tests = loadTests(fetchTestData(testDirectory)).map(_runTest);
+  }
 
-  /// [MatrixTest]s to run.
-  final Stream<MatrixTest> tests;
+  /// Lazy test result stream
+  late final Stream<RunnerResult> _tests;
 
   /// Represents the callback used to parse both the yaml test input and the
   /// output that the parser should match against.
@@ -81,20 +91,13 @@ final class TestRunner {
   /// Simple test stat counter
   final counter = TestRunCounter();
 
-  /// Runs the [tests] from the test suite and saves any failed tests if
+  /// Runs the tests from the test suite and saves any failed tests if an
   /// [outputWriter] is provided.
   Future<void> runTestSuite() async {
-    await for (final (:failed, :result) in _runTests()) {
+    await for (final (:failed, :result) in _tests) {
       if (failed) {
         outputWriter.onFailed(result);
       }
-    }
-  }
-
-  /// Runs all [tests] asynchronously.
-  Stream<RunnerResult> _runTests() async* {
-    await for (final test in tests) {
-      yield _runTest(test);
     }
   }
 
@@ -145,6 +148,8 @@ final class TestRunner {
       case FailTest _:
         {
           counter.bumpCount(isSuccess: false);
+
+          // We expect it to fail.
           if (failed) {
             failed = false;
             break;
