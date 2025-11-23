@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:yaml_test_suite_runner/test_loader.dart';
-import 'package:yaml_test_suite_runner/utils.dart';
+import 'package:yaml_test_suite_runner/src/test_loader.dart';
+import 'package:yaml_test_suite_runner/src/utils.dart';
 
 /// YAML parser callback
 typedef YamlParser = Object? Function(String yaml);
