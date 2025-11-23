@@ -1,7 +1,6 @@
 name: yaml_test_suite_runner
 description: A custom YAML test suite runner.
 version: 0.0.1
-# repository: https://github.com/my_org/my_repo
 
 publish_to: none
 

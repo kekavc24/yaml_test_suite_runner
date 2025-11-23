@@ -12,9 +12,13 @@ The runner is self-contained. You only need to provide a parse function and an o
     - Create a package.
     - Add this repo as `dev_dependency`. Follow procedures [here][dependencies].
 
-2. Provide an entry point that instantiates the `TestRunner` and runs the test. The runner has a `TestCounter` that can provide a generic summary and the pass rate of the current run by calling its `getSummary` method.
+2. Provide an entry point that instantiates the `TestRunner` and runs the test by calling the `runTestSuite` method. The runner has a `TestCounter` that can provide a generic summary and the pass rate of the current run by calling its `getSummary` method.
 
 3. Compile the executable or just run the script using `Dart` itself.
+
+## Who's using it
+
+- [rookie_yaml](https://github.com/kekavc24/rookie_yaml)
 
 [custom_test_suite]: https://github.com/kekavc24/yaml_test_suite_dart
 [yaml_link]: https://github.com/yaml/yaml-test-suite
