@@ -7,10 +7,8 @@ Runs the test suite data regenerated [here][custom_test_suite]. The raw tests ca
 The runner is self-contained. You only need to provide a parse function and an object comparator to `TestRunner`.
 
 1. Add this repository.
-  - Fork or download if you need to modify it.
-  - Alternatively, for your CI or other usecases, you may need to:
-    - Create a package.
-    - Add this repo as `dev_dependency`. Follow procedures [here][dependencies].
+    - Fork or download if you need to modify it.
+    - Alternatively, for your CI or other usecases, you may need to add it as dependency in whichever way you choose. Follow procedures [here][dependencies].
 
 2. Provide an entry point that instantiates the `TestRunner` and runs the test by calling the `runTestSuite` method. The runner has a `TestCounter` that can provide a generic summary and the pass rate of the current run by calling its `getSummary` method.
 
