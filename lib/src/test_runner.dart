@@ -103,7 +103,6 @@ final class TestRunner {
 
   /// Blocks and runs a single test and returns a [MatrixResult].
   RunnerResult _runTest(MatrixTest test) {
-    print(test);
     final MatrixTest(:testID, :description, :testAsYaml) = test;
 
     String? parserError;
