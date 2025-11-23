@@ -84,40 +84,37 @@ const _testSuiteCommitHash = '8a482865bd22d96f9da4cead1840c297e1de7979';
 const _repoUrl = 'https://github.com/kekavc24/yaml_test_suite_dart';
 
 /// Fetches the test data from the [_repoUrl]
-String fetchTestData() {
-  final testPath = path.joinAll([
-    Directory.systemTemp.absolute.path,
-    'yaml-test-suite',
-  ]);
+String fetchTestData([String? directory]) {
+  final testPath =
+      directory ??
+      path.joinAll([Directory.systemTemp.absolute.path, 'yaml-test-suite']);
 
   final dir = Directory(testPath);
 
-  // This directory is not empty and has data
-  if (dir.existsSync()) return testPath;
+  // Purge any data in the directory.
+  if (dir.existsSync()) {
+    dir.deleteSync(recursive: true);
+  }
 
   dir.createSync(recursive: true);
 
   // Set up our tests
-  void runCommand(String command, List<String> args) {
-    if (Process.runSync(command, args, workingDirectory: testPath)
+  void runGit(List<String> args) {
+    if (Process.runSync('git', args, workingDirectory: testPath)
         case ProcessResult(:final exitCode) when exitCode != 0) {
       throw LoadingError(
-        'Failed to load test suite repo. Process exited with a'
-        ' "$exitCode" code',
+        'Failed to load test suite repo. Process exited with a "$exitCode" '
+        'code',
       );
     }
   }
 
-  void runGitCommand(List<String> args) => runCommand('git', args);
+  runGit(['init']); // Faux repo. No cloning baby.
+  runGit(['remote', 'add', 'origin', _repoUrl]);
 
-  runGitCommand(['init']); // Faux repo. No cloning baby.
-  runGitCommand(['remote', 'add', 'origin', _repoUrl]);
-
-  /// Fetch the generated tests from our test-suite fork. Load and run our own
-  /// simple tests. Ergo, we can simply checkout the commit we are pinning
-  /// ourself to without fetching the entire repo
-  runGitCommand(['fetch', 'origin', _testSuiteCommitHash]);
-  runGitCommand(['checkout', 'FETCH_HEAD']);
+  // Fetch tests from the fork.
+  runGit(['fetch', 'origin', _testSuiteCommitHash]);
+  runGit(['checkout', 'FETCH_HEAD']);
   return testPath;
 }
 
