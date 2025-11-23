@@ -53,7 +53,8 @@ final class TestRunner {
     this.tests, {
     required this.parseFunction,
     required this.sourceComparator,
-  });
+    DummyWriter? writer,
+  }) : outputWriter = writer ?? DummyWriter.forRunner(null, saveFailed: false);
 
   /// [MatrixTest]s to run.
   final Stream<MatrixTest> tests;
@@ -74,11 +75,24 @@ final class TestRunner {
   /// [parseFunction] should be able to parse both json and yaml.
   final ObjectComparator sourceComparator;
 
+  /// Writes failed tests
+  final DummyWriter outputWriter;
+
   /// Simple test stat counter
   final counter = TestRunCounter();
 
+  /// Runs the [tests] from the test suite and saves any failed tests if
+  /// [outputWriter] is provided.
+  Future<void> runTestSuite() async {
+    await for (final (:failed, :result) in _runTests()) {
+      if (failed) {
+        outputWriter.onFailed(result);
+      }
+    }
+  }
+
   /// Runs all [tests] asynchronously.
-  Stream<RunnerResult> runTests() async* {
+  Stream<RunnerResult> _runTests() async* {
     await for (final test in tests) {
       yield _runTest(test);
     }
