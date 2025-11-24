@@ -80,7 +80,7 @@ const _gitPath = '.git';
 
 const _emptyMeta = 'No meta description was provided';
 
-const _testSuiteCommitHash = '8a482865bd22d96f9da4cead1840c297e1de7979';
+const _testSuiteCommitHash = 'cc64aec94687632358cc804133e4d83518f3783a';
 const _repoUrl = 'https://github.com/kekavc24/yaml_test_suite_dart';
 
 /// Fetches the test data from the [_repoUrl]
