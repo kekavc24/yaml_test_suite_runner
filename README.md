@@ -14,6 +14,10 @@ The runner is self-contained. You only need to provide a parse function and an o
 
 3. Compile the executable or just run the script using `Dart` itself.
 
+## Failed Tests Output
+
+The `TestRunner` accepts a `DummyWriter` which can write to save the failed tests to your desired directory.
+
 ## Who's using it
 
 - [rookie_yaml](https://github.com/kekavc24/rookie_yaml)
