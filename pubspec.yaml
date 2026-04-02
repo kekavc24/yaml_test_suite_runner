@@ -9,6 +9,7 @@ environment:
 
 # Add regular dependencies here.
 dependencies:
+  meta: ^1.18.2
   path: ^1.9.1
   rookie_yaml: ^0.7.0-pre.2
 

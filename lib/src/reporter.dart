@@ -1,3 +1,4 @@
+import 'package:meta/meta.dart';
 import 'package:yaml_test_suite_runner/src/test_result.dart';
 
 /// A test reporter for the runner.
@@ -65,6 +66,7 @@ mixin class Metrics implements Reporter {
   }) => result.test.fail ? ifFail() : ifPass();
 
   @override
+  @mustCallSuper
   void reportFailed(TestResult result) => _metrics(
     result,
     ifFail: () => ++_countFailFailing,
@@ -72,6 +74,7 @@ mixin class Metrics implements Reporter {
   );
 
   @override
+  @mustCallSuper
   void reportPassed(TestResult result) => _metrics(
     result,
     ifFail: () => ++_countFailPassing,
@@ -79,6 +82,7 @@ mixin class Metrics implements Reporter {
   );
 
   @override
+  @mustCallSuper
   void reportSkipped(TestResult result) => _metrics(
     result,
     ifFail: () => ++_countFailSkipped,
