@@ -1,6 +1,6 @@
 name: yaml_test_suite_runner
 description: A custom YAML test suite runner.
-version: 0.0.3
+version: 0.0.4
 
 publish_to: none
 
@@ -9,8 +9,8 @@ environment:
 
 # Add regular dependencies here.
 dependencies:
-  args: ^2.7.0
   path: ^1.9.1
+  rookie_yaml: ^0.7.0-pre.2
 
 dev_dependencies:
   lints: ^6.0.0

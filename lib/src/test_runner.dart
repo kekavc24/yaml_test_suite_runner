@@ -1,173 +1,164 @@
-import 'dart:convert';
+import 'dart:async';
 
+import 'package:yaml_test_suite_runner/src/builder.dart';
+import 'package:yaml_test_suite_runner/src/reporter.dart';
 import 'package:yaml_test_suite_runner/src/test_loader.dart';
-import 'package:yaml_test_suite_runner/src/utils.dart';
+import 'package:yaml_test_suite_runner/src/test_result.dart';
 
-/// YAML parser callback
-typedef YamlParser = Object? Function(String yaml);
+/// Callback for loading all documents declared in a YAML string.
+typedef MultiDocLoader = List<Object?> Function(String yaml);
 
-/// Callback that compares a parsed object and an object matching the expected
-/// output
-typedef ObjectComparator = bool Function(Object? parsed, Object? toCompare);
+/// Callback that checks if a parsed object is valid.
+typedef CompareFunc = bool Function(Object? parsed, Object? expected);
 
-/// A single test result
-typedef RunnerResult = ({bool failed, MatrixResult result});
-
-/// Parses [jsonOutput]vor [yamlfallback] with the [parseFunction] and compare
-/// the object emitted to [parsed] with the [comparator]. Calls [onFail] if the
-/// two objects are not equal or [parseFunction] throws an error when parsing
-/// [jsonOutput] or [yamlfallback].
-void _matchOutput(
-  Object? parsed, {
-  required String? jsonOutput,
-  required String? yamlfallback,
-  required YamlParser parseFunction,
-  required ObjectComparator comparator,
-  required void Function(String outputError, String? trace) onFail,
-}) {
+/// Runs a [test] and expects it to fail.
+void _expectFail(Reporter reporter, MultiDocLoader loader, YamlTest test) {
   try {
-    final toCompare = jsonOutput != null
-        ? json.decode(jsonOutput)
-        : parseFunction(yamlfallback ?? '');
+    final docs = loader(test.yaml);
+    reporter.reportFailed(
+      FailingTest(
+        test: test,
+        resultType: ResultType.expectedFail,
+        onFail: 'Expected the test to failed but found a parsed node: $docs',
+      ),
+    );
+  } catch (_) {
+    reporter.reportPassed(TestResult.passing(test));
+  }
+}
 
-    if (!comparator(parsed, toCompare)) {
-      onFail('''
-Expected: $toCompare
+/// DTO when a parsed object doesn't match the expected object.
+typedef FailedOutputCheck = ({String input, String error, String? trace});
 
-Parsed: $parsed''', null);
+/// Checks if any of the available inputs match the [parsed] object.
+(PassingResult, List<FailedOutputCheck>) _checkPossibleOutputs(
+  List<Object?> parsed,
+  MultiDocLoader loader,
+  CompareFunc comparator,
+  Map<String, String?> toCompare,
+) {
+  final keyMap = <String, int>{};
+  final failedInputs = <FailedOutputCheck>[];
+
+  void setTo(String key, int setting) => keyMap[key] = setting;
+
+  for (final MapEntry(:key, :value) in toCompare.entries) {
+    if (value == null) continue;
+
+    try {
+      final expected = loader(value);
+
+      if (!comparator(parsed, expected)) {
+        setTo(key, 0);
+        failedInputs.add((
+          input: value,
+          error:
+              '''
+Expected: $expected
+Parsed: $parsed
+''',
+          trace: null,
+        ));
+        continue;
+      }
+
+      setTo(key, 1);
+    } catch (e, s) {
+      setTo(key, 0);
+      failedInputs.add((
+        input: value,
+        error: e.toString(),
+        trace: s.toString(),
+      ));
     }
-  } catch (error, stackTrace) {
-    onFail(
-      'Failed to parse reference output. Parser failed with:'
-      '${error.toString().split('\n').map((s) => '\t$s').join('\n')}',
-      stackTrace.toString(),
+  }
+
+  return (
+    (
+      json: keyMap['json'] ?? -1,
+      dump: keyMap['dump'] ?? -1,
+      emit: keyMap['emit'] ?? -1,
+    ),
+    failedInputs,
+  );
+}
+
+void _expectPassing(
+  Reporter reporter,
+  MultiDocLoader loader,
+  CompareFunc comparator,
+  YamlTest test,
+) {
+  const resultType = ResultType.expectedPass;
+
+  try {
+    final YamlTest(:yaml, :emittedYaml, :yamlJson, :yamlDump) = test;
+
+    final docs = loader(test.yaml);
+    final (result, failing) = _checkPossibleOutputs(docs, loader, comparator, {
+      'json': yamlJson,
+      'dump': yamlDump,
+      'emit': emittedYaml,
+    });
+
+    if (result.anyPassed) {
+      reporter.reportPassed(PassingParseTest(test, aggregate: result));
+      return;
+    }
+
+    reporter.reportFailed(
+      FailingTest(test: test, resultType: resultType, onFail: failing),
+    );
+  } catch (e, s) {
+    reporter.reportFailed(
+      FailingTest(
+        test: test,
+        resultType: resultType,
+        onFail: [('', e.toString(), s.toString())],
+      ),
     );
   }
 }
 
-/// A `try-catch` test runner.
+/// Runs a single test.
 final class TestRunner {
-  /// Creates a test runner.
-  ///
-  /// The tests are loaded into the [testDirectory] provided. Purges any data
-  /// in the directory before the tests are loaded. Provide a [writer] with a
-  /// directory if you need your failed tests to be saved.
-  ///
-  /// The [parseFunction] is used to parse the yaml input and the `out.yaml`
-  /// file used as a fallback when the `jsonToDartStr` file is missing. The
-  /// [sourceComparator] compares the parsed object and the reference object
-  /// parsed from the `jsonToDartStr` or `out.yaml`.
-  TestRunner({
-    required this.parseFunction,
-    required this.sourceComparator,
-    String? testDirectory,
-    DummyWriter? writer,
-  }) : outputWriter = writer ?? DummyWriter.forRunner(null, saveFailed: false) {
-    _tests = loadTests(fetchTestData(testDirectory)).map(_runTest);
+  TestRunner(
+    this.reporter, {
+    required this.multiDocLoader,
+    required this.comparator,
+  });
+
+  /// A reporter for the test.
+  final Reporter reporter;
+
+  /// Loads all YAML documents in a single test input.
+  final MultiDocLoader multiDocLoader;
+
+  /// Compares the parsed object to the expected object in YAML.
+  final CompareFunc comparator;
+
+  /// Runs a [test] from the official YAML Test suite.
+  void run(YamlTest test) {
+    return test.skip
+        ? reporter.reportSkipped(TestResult.skipped(test))
+        : test.fail
+        ? _expectFail(reporter, multiDocLoader, test)
+        : _expectPassing(reporter, multiDocLoader, comparator, test);
   }
+}
 
-  /// Lazy test result stream
-  late final Stream<RunnerResult> _tests;
+/// Runs the entire YAML Test Suite.
+final class TestSuiteRunner {
+  TestSuiteRunner({required this.runner});
 
-  /// Represents the callback used to parse both the yaml test input and the
-  /// output that the parser should match against.
-  ///
-  /// The output is usually present as json. If missing, the `out.yaml` is
-  /// used.
-  final YamlParser parseFunction;
+  /// Runs a single test.
+  final TestRunner runner;
 
-  /// Represents a callback used to compare the object emitted after calling
-  /// the [parseFunction] on:
-  ///   - `in.yaml`
-  ///   - `jsonToDartStr` or `out.yaml`
-  ///
-  /// This only ever called if input and output both match. A valid yaml
-  /// [parseFunction] should be able to parse both json and yaml.
-  final ObjectComparator sourceComparator;
-
-  /// Writes failed tests
-  final DummyWriter outputWriter;
-
-  /// Simple test stat counter
-  final counter = TestRunCounter();
-
-  /// Runs the tests from the test suite and saves any failed tests if an
-  /// [outputWriter] is provided.
+  /// Runs the entire test suite.
   Future<void> runTestSuite() async {
-    await for (final (:failed, :result) in _tests) {
-      if (failed) {
-        outputWriter.onFailed(result);
-      }
-    }
-  }
-
-  /// Blocks and runs a single test and returns a [MatrixResult].
-  RunnerResult _runTest(MatrixTest test) {
-    final MatrixTest(:testID, :description, :testAsYaml) = test;
-
-    String? parserError;
-    String? stackTrace;
-    var failed = true;
-
-    Object? parsed;
-
-    try {
-      parsed = parseFunction(testAsYaml);
-      failed = false;
-    } catch (e, trace) {
-      parserError = e.toString();
-      stackTrace = trace.toString();
-    }
-
-    switch (test) {
-      case SuccessTest(:final jsonAsDartStr, :final yamlFallback):
-        {
-          counter.bumpCount(isSuccess: true);
-
-          if (failed) {
-            counter.bumpFail(isSuccess: true);
-            break;
-          }
-
-          _matchOutput(
-            parsed,
-            jsonOutput: jsonAsDartStr,
-            yamlfallback: yamlFallback,
-            parseFunction: parseFunction,
-            comparator: sourceComparator,
-            onFail: (outputError, trace) {
-              failed = true;
-              counter.bumpFail(isSuccess: true);
-              parserError = outputError;
-              stackTrace = trace;
-            },
-          );
-        }
-
-      case FailTest _:
-        {
-          counter.bumpCount(isSuccess: false);
-
-          // We expect it to fail.
-          if (failed) {
-            failed = false;
-            break;
-          }
-
-          counter.bumpFail(isSuccess: false);
-          parserError = 'Expected test to fail but found parsed node: $parsed';
-        }
-    }
-
-    return (
-      failed: failed,
-      result: (
-        testID: testID,
-        description: description,
-        testInput: testAsYaml,
-        messageOnFail: parserError ?? '',
-        stackTrace: stackTrace,
-      ),
-    );
+    final testStream = StreamController<YamlTest>();
+    final subscription = testStream.stream.listen(runner.run).asFuture<void>();
+    loadTests(testStream);
+    return subscription;
   }
 }

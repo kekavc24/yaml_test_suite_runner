@@ -2,216 +2,65 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
+import 'package:rookie_yaml/rookie_yaml.dart';
+import 'package:yaml_test_suite_runner/src/builder.dart';
+import 'package:yaml_test_suite_runner/src/trigger.dart';
 
-/// Result after a [MatrixTest] has been run to completion
-typedef MatrixResult = ({
-  String testID,
-  String description,
-  String testInput,
-  String messageOnFail,
-  String? stackTrace,
-});
+const _testSuiteCommitHash = 'da267a5c4782e7361e82889e76c0dc7df0e1e870';
+const _repoUrl = 'https://github.com/yaml/yaml-test-suite.git';
+const _testDir = 'src';
 
-/// A `YAML` test suite test
-sealed class MatrixTest {
-  /// Test ID
-  final String testID;
-
-  /// Test description
-  String description;
-
-  /// `YAML` string to be used in test
-  final String testAsYaml;
-
-  /// Log messages
-  final List<String> logs;
-
-  MatrixTest(
-    this.testID, {
-    required this.description,
-    required this.testAsYaml,
-    required this.logs,
-  });
-
-  @override
-  String toString() => '$testID: $description';
+/// Creates a temporary directory with the [subFolder] as the base.
+Directory _createTempDir(String subFolder) {
+  final pathToDir = path.joinAll([Directory.systemTemp.path, subFolder]);
+  final dir = Directory(pathToDir);
+  if (!dir.existsSync()) dir.createSync(recursive: true);
+  return dir;
 }
 
-/// A [MatrixTest] that must fail.
-final class FailTest extends MatrixTest {
-  FailTest(
-    super.testID, {
-    required super.description,
-    required super.testAsYaml,
-    required super.logs,
-  });
-}
+/// Fetches the YAML test suite and checks out the head at the
+/// [_testSuiteCommitHash].
+Directory _fetchYamlTestSuite() {
+  final suite = _createTempDir('yaml-test-suite');
+  final fullPath = suite.absolute.path;
 
-/// A [MatrixTest] that must pass.
-final class SuccessTest extends MatrixTest {
-  SuccessTest(
-    super.testID, {
-    required super.description,
-    required super.testAsYaml,
-    required this.jsonAsDartStr,
-    required this.yamlFallback,
-    required super.logs,
-  });
+  void runGit(List<String> args) =>
+      Process.runSync('git', args, workingDirectory: fullPath);
 
-  /// A json-like `Dart` string that is used to validate the output of the
-  /// successful test.
-  final String? jsonAsDartStr;
-
-  /// A fallback yaml output to use as comparison.
-  final String? yamlFallback;
-}
-
-/// A [StateError] thrown when a [MatrixTest] could not be loaded from a
-/// stream test inputs
-final class LoadingError extends StateError {
-  LoadingError(String reason) : super('Failed to load matrix tests: $reason');
-}
-
-const _metaPath = '===';
-const _jsonOutputPath = 'jsonToDartStr';
-const _yamlOutputFallback = 'out.yaml';
-const _yamlInputPath = 'in.yaml';
-const _gitPath = '.git';
-
-const _emptyMeta = 'No meta description was provided';
-
-const _testSuiteCommitHash = 'a27cb722dc679f80da356ea301d30c567fbb2cae';
-const _repoUrl = 'https://github.com/kekavc24/yaml_test_suite_dart';
-
-/// Fetches the test data from the [_repoUrl]
-String fetchTestData([String? directory]) {
-  final testPath =
-      directory ??
-      path.joinAll([Directory.systemTemp.absolute.path, 'yaml-test-suite']);
-
-  final dir = Directory(testPath);
-
-  // Purge any data in the directory.
-  if (dir.existsSync()) {
-    dir.deleteSync(recursive: true);
-  }
-
-  dir.createSync(recursive: true);
-
-  // Set up our tests
-  void runGit(List<String> args) {
-    if (Process.runSync('git', args, workingDirectory: testPath)
-        case ProcessResult(:final exitCode) when exitCode != 0) {
-      throw LoadingError(
-        'Failed to load test suite repo. Process exited with a "$exitCode" '
-        'code',
-      );
-    }
-  }
-
-  runGit(['init']); // Faux repo. No cloning baby.
+  runGit(['init']); // Faux repo. No cloning, baby.
   runGit(['remote', 'add', 'origin', _repoUrl]);
-
-  // Fetch tests from the fork.
   runGit(['fetch', 'origin', _testSuiteCommitHash]);
   runGit(['checkout', 'FETCH_HEAD']);
-  return testPath;
+  return suite;
 }
 
-/// Loads `YAML` test suite files from a [matrixDir].
-Stream<MatrixTest> loadTests(String matrixDir) async* {
-  final testDir = Directory(matrixDir);
+/// Fetches the YAML test suite files.
+Stream<File> fetchTests() {
+  return Directory(path.joinAll([_fetchYamlTestSuite().path, _testDir]))
+      .list()
+      .where((fs) => fs is File && path.extension(fs.path).endsWith('yaml'))
+      .cast<File>();
+}
 
-  if (!await testDir.exists()) {
-    throw LoadingError('Expected a test data directory at path "$matrixDir"');
-  }
+/// Loads the yaml test suite files and adds them to the stream handled by the
+/// [controller]. Calls `close` on the [controller] after all the tests have
+/// been loaded.
+void loadTests(StreamController<YamlTest> controller) async {
+  final builder = TestBuilder();
+  final trigger = AdvancingTrigger(builder, controller);
 
-  /// YAML test data is arranged in directories in 2 distinct formats:
-  ///   - Tests that should parse successfully
-  ///   - Tests that should fail due to invalid yaml
-  ///
-  /// Tests that should parse (pun intended) successfully have:
-  ///   - Canonical test description
-  ///   - Expected output as json
-  ///   - Input as yaml
-  ///   - output as yaml by tool (not supported yet by this tool)
-  ///
-  /// Tests that should fail have:
-  ///   - Canonical test description
-  ///   - A blank error file
-  ///   - Input as yaml
-  await for (final dir in testDir.list()) {
-    if (dir is! Directory) {
-      throw LoadingError(
-        'Found a test file. Expected a test directory at'
-        '"${dir.absolute.path}"',
-      );
-    }
+  await for (final file in fetchTests()) {
+    final testID = path.basenameWithoutExtension(file.path);
+    builder.reset = testID;
 
-    final normalized = path.basename(dir.path);
-
-    if (normalized == _gitPath) continue;
-
-    yield await _loadTest(
-      normalized,
-      dir.list().where((f) => f is File).cast<File>(),
+    loadObject(
+      // It would be more efficient to decode the utf8 while parsing. However,
+      // `package:rookie_yaml` implements strict utf8 which does not allow
+      // malformed code units.
+      YamlSource.simpleString(file.readAsStringSync()),
+      triggers: trigger,
     );
   }
-}
 
-/// Loads a single [MatrixTest] from its directory. [testID] is usually the
-/// directory's name that uniquely identifies the test.
-Future<MatrixTest> _loadTest(String testID, Stream<File> testFiles) async {
-  String? metadescription;
-  String? yamlInput;
-  String? jsonOutput;
-  String? yamlOutputFallback;
-
-  final logs = <String>[];
-  const snark = 'Was it important?';
-
-  var isError = true;
-
-  String readFileSync(File file) => file.readAsStringSync();
-
-  await for (final file in testFiles) {
-    final filename = path.basename(file.path);
-
-    switch (filename) {
-      case _jsonOutputPath:
-        isError = false;
-        jsonOutput = readFileSync(file).trim();
-
-      case _yamlOutputFallback:
-        isError = false;
-        yamlOutputFallback = readFileSync(file);
-
-      case _yamlInputPath:
-        yamlInput = readFileSync(file);
-
-      case _metaPath:
-        metadescription = readFileSync(file);
-
-      default:
-        logs.add('Ignored "$filename". $snark');
-    }
-  }
-
-  // We must have valid yaml input!
-  if (yamlInput == null) {
-    throw LoadingError('No yaml input found for testID: $testID');
-  }
-
-  final meta = metadescription ?? _emptyMeta;
-
-  return isError
-      ? FailTest(testID, description: meta, testAsYaml: yamlInput, logs: logs)
-      : SuccessTest(
-          testID,
-          description: meta,
-          testAsYaml: yamlInput,
-          jsonAsDartStr: jsonOutput,
-          yamlFallback: yamlOutputFallback,
-          logs: logs,
-        );
+  await controller.close();
 }
