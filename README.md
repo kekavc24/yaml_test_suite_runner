@@ -1,6 +1,6 @@
 # Custom YAML Test Suite Runner
 
-Runs the test suite data regenerated [here][custom_test_suite]. The raw tests can be found [here][yaml_link]. The runner has been written in `Dart` but it's quite agnostic.
+Runs the test suite data found [here][yaml_link]. The runner has been written in `Dart` for simplicity.
 
 ## Usage
 
@@ -10,13 +10,12 @@ The runner is self-contained. You only need to provide a parse function and an o
     - Fork or download if you need to modify it.
     - Alternatively, for your CI or other usecases, you may need to add it as dependency in whichever way you choose. Follow procedures [here][dependencies].
 
-2. Provide an entry point that instantiates the `TestRunner` and runs the test by calling the `runTestSuite` method. The runner has a `TestCounter` that can provide a generic summary and the pass rate of the current run by calling its `getSummary` method.
-
-3. Compile the executable or just run the script using `Dart` itself.
+2. Provide an entry point that instantiates the `TestSuiteRunner` and runs all the tests by calling the `runTestSuite` method.
+    - Provide a `TestRunner` that accepts a yaml parsing function, a comparator for equality and a `Reporter`.
 
 ## Failed Tests Output
 
-The `TestRunner` accepts a `DummyWriter` which can write to save the failed tests to your desired directory.
+- You need to extend/mix-in the `Metrics` class and override the `reportFailed` method. Alternatively, you may extend/implement its actual super class `Reporter` and override the three methods it provides.
 
 ## Who's using it
 
