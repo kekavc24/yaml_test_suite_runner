@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:rookie_yaml/rookie_yaml.dart';
@@ -25,37 +26,6 @@ mixin Writer<T> on BytesToScalar<T> {
 
   @override
   void onComplete() {}
-}
-
-/// Helps inline multiline json and bypasses `package:rookie_yaml`'s type
-/// inference.
-final class InlinedJson extends BytesToScalar<String> with Writer {
-  InlinedJson(OnDone callDone) {
-    onDone = callDone;
-    _buffer = _skipWhiteSpace;
-  }
-
-  void _skipWhiteSpace(int char) {
-    if (char.isWhiteSpace() || char.isLineBreak()) return;
-    _stringBuffer.writeCharCode(char);
-    _buffer = _bufferChar;
-  }
-
-  void _bufferChar(int char) {
-    // Writing a new line with no json
-    if (char.isLineBreak()) {
-      _buffer = _skipWhiteSpace;
-      return;
-    }
-
-    _stringBuffer.writeCharCode(char);
-  }
-
-  @override
-  String parsed() {
-    onDone();
-    return _stringBuffer.toString();
-  }
 }
 
 /// Helps parse the test suite tags for a test.
@@ -87,6 +57,128 @@ final class TestTags extends BytesToScalar<Set<String>> with Writer {
     _flush();
     onDone();
     return _tags;
+  }
+}
+
+extension on int {
+  bool jsonObjPush() => this == mappingStart || this == flowSequenceStart;
+
+  bool jsonObjPop() => this == mappingEnd || this == flowSequenceEnd;
+
+  int jsonPopPartner() => this == mappingEnd ? mappingStart : flowSequenceStart;
+
+  bool jsonWhite() => switch (this) {
+    space || lineFeed || carriageReturn || tab => true,
+    _ => false,
+  };
+}
+
+/// Helps inline multiline json and bypasses `package:rookie_yaml`'s type
+/// inference.
+final class InlinedJson extends BytesToScalar<String> with Writer {
+  InlinedJson(OnDone callDone) {
+    onDone = callDone;
+    _buffer = _warmUp;
+  }
+
+  var _escaped = false;
+  var _topLevel = true;
+
+  final _braceLike = ListQueue<int>();
+
+  final _yamlObjs = <String>[];
+
+  void _warmUp(int char) => _bufferChar(char);
+
+  void _rootObj(int char) {
+    _yamlObjs.add(_stringBuffer.toString());
+    _stringBuffer.clear();
+    _bufferChar(char);
+  }
+
+  void _skipWhiteSpace(int char) {
+    if (char.isWhiteSpace() || char.isLineBreak()) return;
+    _topLevel ? _rootObj(char) : _bufferChar(char);
+  }
+
+  void _bufferQuoted(int char) {
+    _stringBuffer.writeCharCode(char);
+
+    if (_escaped) {
+      _escaped = false;
+    } else if (char == doubleQuote) {
+      _buffer = _skipWhiteSpace;
+    } else if (char == backSlash) {
+      _escaped = true;
+    }
+  }
+
+  void _bufferPlain(int char) {
+    if (char.jsonWhite()) {
+      _buffer = _skipWhiteSpace;
+      return;
+    }
+
+    _stringBuffer.writeCharCode(char);
+  }
+
+  void _jsonObject(int char) {
+    _stringBuffer.writeCharCode(char);
+
+    if (char.jsonObjPush()) {
+      _braceLike.add(char);
+      _topLevel = false;
+    } else {
+      assert(char.jsonObjPop(), 'Expected "}" or "]"');
+      final partner = _braceLike.removeLast();
+      assert(partner == char.jsonPopPartner());
+      _topLevel = _topLevel || _braceLike.isEmpty;
+    }
+
+    _buffer = _skipWhiteSpace;
+  }
+
+  void _bufferChar(int char) {
+    switch (char) {
+      // { } [ ]
+      case flowSequenceStart || flowSequenceEnd || mappingStart || mappingEnd:
+        _jsonObject(char);
+
+      // : ,
+      case flowEntryEnd || mappingValue:
+        _stringBuffer.writeCharCode(char);
+        _buffer = _skipWhiteSpace;
+
+      // "
+      case doubleQuote:
+        _stringBuffer.writeCharCode(char);
+        _buffer = _bufferQuoted;
+
+      default:
+        {
+          if (char.jsonWhite()) {
+            _buffer = _skipWhiteSpace;
+            return;
+          }
+
+          _stringBuffer.writeCharCode(char);
+          _buffer = _bufferPlain;
+        }
+    }
+  }
+
+  @override
+  void onComplete() {
+    if (_yamlObjs.isNotEmpty) {
+      _yamlObjs.add(_stringBuffer.toString());
+      _stringBuffer.clear();
+    }
+  }
+
+  @override
+  String parsed() {
+    onDone();
+    return _yamlObjs.isEmpty ? _stringBuffer.toString() : _yamlObjs.toString();
   }
 }
 
