@@ -114,7 +114,9 @@ void _expectPassing(
       FailingTest(
         test: test,
         resultType: resultType,
-        onFail: [('', e.toString(), s.toString())],
+        onFail: <FailedOutputCheck>[
+          (input: '', error: e.toString(), trace: s.toString()),
+        ],
       ),
     );
   }
