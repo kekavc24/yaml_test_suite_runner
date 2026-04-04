@@ -90,7 +90,7 @@ final class TestTags extends BytesToScalar<Set<String>> with Writer {
   }
 }
 
-/// ——
+/// —
 const _emDash = 0x2014;
 
 /// »
@@ -124,9 +124,9 @@ final class YamlInput extends BytesToScalar<String> with Writer {
 
   /// Buffers the [char].
   void _writeChar(int char) {
-    if (char == _emDash) {
-      _tabReplacer.writeCharCode(char);
+    if (char case _emDash || _hardTabAlt) {
       _buffer = _hardTabs;
+      _buffer(char);
       return;
     } else if (char == _drainInput) {
       _buffer = _drain;
