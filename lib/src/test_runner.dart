@@ -28,7 +28,12 @@ void _expectFail(Reporter reporter, MultiDocLoader loader, YamlTest test) {
 }
 
 /// DTO when a parsed object doesn't match the expected object.
-typedef FailedOutputCheck = ({String input, String error, String? trace});
+typedef FailedOutputCheck = ({
+  String reference,
+  String input,
+  String error,
+  String? trace,
+});
 
 /// Checks if any of the available inputs match the [parsed] object.
 (PassingResult, List<FailedOutputCheck>) _checkPossibleOutputs(
@@ -51,6 +56,7 @@ typedef FailedOutputCheck = ({String input, String error, String? trace});
       if (!comparator(parsed, expected)) {
         setTo(key, 0);
         failedInputs.add((
+          reference: key,
           input: value,
           error:
               '''
@@ -66,6 +72,7 @@ Parsed: $parsed
     } catch (e, s) {
       setTo(key, 0);
       failedInputs.add((
+        reference: key,
         input: value,
         error: e.toString(),
         trace: s.toString(),
@@ -115,7 +122,7 @@ void _expectPassing(
         test: test,
         resultType: resultType,
         onFail: <FailedOutputCheck>[
-          (input: '', error: e.toString(), trace: s.toString()),
+          (reference: '', input: '', error: e.toString(), trace: s.toString()),
         ],
       ),
     );
