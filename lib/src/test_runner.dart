@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:yaml_test_suite_runner/src/builder.dart';
 import 'package:yaml_test_suite_runner/src/reporter.dart';
@@ -51,7 +52,8 @@ typedef FailedOutputCheck = ({
     if (value == null) continue;
 
     try {
-      final expected = loader(value);
+      // Prefer json for
+      final expected = key == 'json' ? json.decode(value) : loader(value);
 
       if (!comparator(parsed, expected)) {
         setTo(key, 0);

@@ -169,7 +169,7 @@ final class InlinedJson extends BytesToScalar<String> with Writer {
 
   @override
   void onComplete() {
-    if (_yamlObjs.isNotEmpty) {
+    if (_stringBuffer.isNotEmpty) {
       _yamlObjs.add(_stringBuffer.toString());
       _stringBuffer.clear();
     }
@@ -178,7 +178,7 @@ final class InlinedJson extends BytesToScalar<String> with Writer {
   @override
   String parsed() {
     onDone();
-    return _yamlObjs.isEmpty ? _stringBuffer.toString() : _yamlObjs.toString();
+    return _yamlObjs.toString();
   }
 }
 
