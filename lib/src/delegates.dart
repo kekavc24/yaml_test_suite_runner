@@ -61,12 +61,17 @@ final class TestTags extends BytesToScalar<Set<String>> with Writer {
 }
 
 extension on int {
+  /// Whether `this` is an opening delimiter for an object/array.
   bool jsonObjPush() => this == mappingStart || this == flowSequenceStart;
 
+  /// Whether `this` is an closing delimiter for an object/array.
   bool jsonObjPop() => this == mappingEnd || this == flowSequenceEnd;
 
+  /// Obtains the closing delimiter for json object/array. Assumes the caller
+  /// expects one or the other.
   int jsonPopPartner() => this == mappingEnd ? mappingStart : flowSequenceStart;
 
+  /// Whether `this` is a json space, tag or line break.
   bool jsonWhite() => switch (this) {
     space || lineFeed || carriageReturn || tab => true,
     _ => false,
@@ -78,29 +83,36 @@ extension on int {
 final class InlinedJson extends BytesToScalar<String> with Writer {
   InlinedJson(OnDone callDone) {
     onDone = callDone;
-    _buffer = _warmUp;
+    _buffer = _bufferChar;
   }
 
+  /// Whether the last character was escaped.
   var _escaped = false;
+
+  /// Whether this is a top-level json object.
   var _topLevel = true;
 
+  /// Tracks nested objects (array & object/map).
   final _braceLike = ListQueue<int>();
 
+  /// Stores the json strings as a sequence of YAML docs.
   final _yamlObjs = <String>[];
 
-  void _warmUp(int char) => _bufferChar(char);
-
+  /// Flushes the inlined json present in the [_stringBuffer] to [_yamlObjs]
+  /// as a complete document.
   void _rootObj(int char) {
     _yamlObjs.add(_stringBuffer.toString());
     _stringBuffer.clear();
     _bufferChar(char);
   }
 
+  /// Skips any whitespace present between json values.
   void _skipWhiteSpace(int char) {
     if (char.isWhiteSpace() || char.isLineBreak()) return;
     _topLevel ? _rootObj(char) : _bufferChar(char);
   }
 
+  /// Buffers a quoted string.
   void _bufferQuoted(int char) {
     _stringBuffer.writeCharCode(char);
 
@@ -113,6 +125,7 @@ final class InlinedJson extends BytesToScalar<String> with Writer {
     }
   }
 
+  /// Buffers a plain json value with no quotes.
   void _bufferPlain(int char) {
     if (char.jsonWhite()) {
       _buffer = _skipWhiteSpace;
@@ -122,6 +135,7 @@ final class InlinedJson extends BytesToScalar<String> with Writer {
     _stringBuffer.writeCharCode(char);
   }
 
+  /// Walks into/out of a json array/object/map.
   void _jsonObject(int char) {
     _stringBuffer.writeCharCode(char);
 
@@ -138,6 +152,7 @@ final class InlinedJson extends BytesToScalar<String> with Writer {
     _buffer = _skipWhiteSpace;
   }
 
+  /// Redirects the delegate to the desired buffer method.
   void _bufferChar(int char) {
     switch (char) {
       // { } [ ]

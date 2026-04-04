@@ -52,7 +52,8 @@ typedef FailedOutputCheck = ({
     if (value == null) continue;
 
     try {
-      // Prefer json for
+      // Prefer the default json decoder. We already inlined the json into a
+      // sequence of "documents" (objects).
       final expected = key == 'json' ? json.decode(value) : loader(value);
 
       if (!comparator(parsed, expected)) {

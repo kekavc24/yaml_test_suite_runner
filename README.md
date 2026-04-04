@@ -12,6 +12,7 @@ The runner is self-contained. You only need to provide a parse function and an o
 
 2. Provide an entry point that instantiates the `TestSuiteRunner` and runs all the tests by calling the `runTestSuite` method.
     - Provide a `TestRunner` that accepts a yaml parsing function, a comparator for equality and a `Reporter`.
+    - A simple `Metrics` reporter is implemented if you need it.
 
 ## Failed Tests Output
 
