@@ -8,7 +8,7 @@ import 'package:yaml_test_suite_runner/src/delegates.dart';
 OnCustomScalar _fromKey<T>(String? key, OnDone onDone) => switch (key) {
   'json' => () => InlinedJson(onDone),
   'tags' => () => TestTags(onDone),
-  'yaml' => () => YamlInput(onDone),
+  'yaml' || 'dump' || 'emit' => () => YamlInput(onDone),
   _ => () => GenericString(onDone),
 };
 
