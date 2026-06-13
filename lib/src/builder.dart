@@ -2,6 +2,9 @@ final class TestBuilder {
   /// Test ID for the test
   String testID = '';
 
+  /// Test cases tied to a single ID
+  int count = 0;
+
   /// Whether the test should fail.
   bool fail = false;
 
@@ -26,17 +29,29 @@ final class TestBuilder {
   /// YAML from an emitter.
   String? emittedYaml;
 
-  /// Resets the builder to use the specified [testID].
-  set reset(String testID) {
-    this.testID = testID;
+  /// Resets the internal test builder state
+  void _resetInternal() {
     fail = skip = false;
     name = yaml = yamlJson = yamlDump = emittedYaml = null;
     tags = null;
   }
 
+  /// Advances the builder forward when a test file has multiple test cases.
+  void nextTestCase() {
+    _resetInternal();
+    ++count;
+  }
+
+  /// Resets the builder to use the specified [testID].
+  set reset(String testID) {
+    this.testID = testID;
+    _resetInternal();
+    count = 0;
+  }
+
   /// Creates a [YamlTest].
   YamlTest build() => YamlTest(
-    testID,
+    "$testID-${count.toString().padLeft(2, '0')}",
     name: name,
     tags: tags,
     input: yaml,

@@ -366,10 +366,7 @@ final class TestCase extends MappingToObject<String, Object?, YamlTest> {
   @override
   YamlTest parsed() {
     final test = builder.build();
-
-    // Prevents one test case from influencing the next with its skip/fail
-    // params.
-    builder.reset = builder.testID;
+    builder.nextTestCase();
     return test;
   }
 }
