@@ -48,11 +48,11 @@ typedef TestFileFunc = Stream<File> Function();
 /// Loads the yaml test suite files and adds them to the stream handled by the
 /// [controller]. Calls `close` on the [controller] after all the tests have
 /// been loaded.
-void loadTests(StreamController<YamlTest> controller) async =>
+Future<void> loadTests(StreamController<YamlTest> controller) async =>
     loadTestDriver(controller, fetchTests);
 
 /// Loads test files from [source] and adds them to the [controller].
-void loadTestDriver(TestDest controller, TestFileFunc source) async {
+Future<void> loadTestDriver(TestDest controller, TestFileFunc source) async {
   final builder = TestBuilder();
   final trigger = AdvancingTrigger(builder, controller);
 
