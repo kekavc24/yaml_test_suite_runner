@@ -231,22 +231,32 @@ final class YamlInput extends BytesToScalar<String> with Writer {
 
   /// Buffers the [char].
   void _writeChar(int char) {
-    if (char case _emDash || _hardTabAlt) {
-      _buffer = _hardTabs;
-      _buffer(char);
-      return;
-    } else if (char == _drainInput) {
-      _buffer = _drain;
-      return;
-    }
+    switch (char) {
+      // Test suite uses them for readability
+      case _shadowLF:
+        break;
 
-    _stringBuffer.writeCharCode(switch (char) {
-      shadowSpace => space,
-      _shadowLF => lineFeed,
-      _shadowCR => carriageReturn,
-      _shadowBOM => unicodeBomCharacterRune,
-      _ => char,
-    });
+      case _shadowCR:
+        _stringBuffer.writeCharCode(carriageReturn);
+
+      case _emDash || _hardTabAlt:
+        {
+          _buffer = _hardTabs;
+          _buffer(char);
+        }
+
+      case _drainInput:
+        _buffer = _drain;
+
+      case shadowSpace:
+        _stringBuffer.writeCharCode(space);
+
+      case _shadowBOM:
+        _stringBuffer.writeCharCode(unicodeBomCharacterRune);
+
+      default:
+        _stringBuffer.writeCharCode(char);
+    }
   }
 
   /// Buffers the `-` until a [_hardTabAlt] is seen.
